@@ -1,5 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from alembic.config import Config
+from alembic import command
 
 from app.config import get_settings
 from app.routers import appointments, auth, availability, availability_admin, bookings, chat, doctors, reports
@@ -34,6 +36,8 @@ app.include_router(chat.router)
 
 @app.on_event("startup")
 def startup_seed_users() -> None:
+    alembic_cfg = Config("alembic.ini")
+    command.upgrade(alembic_cfg, "head")
     seed_default_users()
 
 
