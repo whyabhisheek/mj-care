@@ -2,7 +2,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.dependencies import require_admin
+from app.dependencies import get_current_user, require_admin
 from app.database import get_db
 from app.models.appointment import Appointment
 from app.models.doctor import Doctor
@@ -11,6 +11,44 @@ from app.services.emailer import send_booking_confirmation_email
 
 
 router = APIRouter(tags=["Bookings"])
+
+
+@router.get("/my-bookings", response_model=list[BookingListItem], status_code=status.HTTP_200_OK)
+def my_bookings(
+    db: Session = Depends(get_db),
+    current_user: object = Depends(get_current_user),
+) -> list[BookingListItem]:
+    user_email = getattr(current_user, "email", None)
+    if not user_email:
+        return []
+    rows = db.execute(
+        select(
+            Appointment.id,
+            Appointment.patient_name,
+            Appointment.phone,
+            Appointment.date,
+            Appointment.slot,
+            Appointment.status,
+            Doctor.name.label("doctor_name"),
+            Doctor.specialization,
+        )
+        .join(Doctor, Doctor.id == Appointment.doctor_id)
+        .where(Appointment.patient_email == user_email)
+        .order_by(Appointment.date.desc(), Appointment.slot.asc(), Appointment.id.desc())
+    ).all()
+    return [
+        BookingListItem(
+            id=row.id,
+            patient_name=row.patient_name,
+            phone=row.phone,
+            doctor_name=row.doctor_name,
+            specialization=row.specialization,
+            date=row.date,
+            slot=row.slot,
+            status=row.status,
+        )
+        for row in rows
+    ]
 
 
 @router.get("/appointments", response_model=list[BookingListItem], status_code=status.HTTP_200_OK)

@@ -1,12 +1,18 @@
+import logging
 import smtplib
 from email.message import EmailMessage
 
 from app.config import get_settings
 
 
+logger = logging.getLogger(__name__)
+
+
 def send_booking_confirmation_email(*, to_email: str, patient_name: str, doctor_name: str, date: str, slot: str) -> None:
     settings = get_settings()
     if not settings.email_host or not settings.email_username or not settings.email_app_password:
+        logger.warning("Email not sent: missing SMTP config (EMAIL_HOST=%s, EMAIL_USERNAME=%s, EMAIL_APP_PASSWORD=%s)",
+                       bool(settings.email_host), bool(settings.email_username), bool(settings.email_app_password))
         return
 
     from_email = settings.email_from or settings.email_username
@@ -87,8 +93,12 @@ def send_booking_confirmation_email(*, to_email: str, patient_name: str, doctor_
     )
     message.add_alternative(html, subtype="html")
 
-    with smtplib.SMTP(settings.email_host, settings.email_port, timeout=10) as smtp:
-        if settings.email_use_tls:
-            smtp.starttls()
-        smtp.login(settings.email_username, settings.email_app_password)
-        smtp.send_message(message)
+    try:
+        with smtplib.SMTP(settings.email_host, settings.email_port, timeout=30) as smtp:
+            if settings.email_use_tls:
+                smtp.starttls()
+            smtp.login(settings.email_username, settings.email_app_password)
+            smtp.send_message(message)
+        logger.info("Email sent successfully to %s", to_email)
+    except Exception as exc:
+        logger.error("Failed to send email to %s: %s", to_email, exc)
