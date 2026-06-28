@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -51,6 +51,7 @@ def list_appointments(
 @router.post("/appointments/{appointment_id}/approve", status_code=status.HTTP_200_OK)
 def approve_appointment(
     appointment_id: int,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     _: object = Depends(require_admin),
 ) -> dict[str, str]:
@@ -61,7 +62,8 @@ def approve_appointment(
     appointment.status = "confirmed"
     db.commit()
     if appointment.patient_email and doctor is not None:
-        send_booking_confirmation_email(
+        background_tasks.add_task(
+            send_booking_confirmation_email,
             to_email=appointment.patient_email,
             patient_name=appointment.patient_name,
             doctor_name=doctor.name,
